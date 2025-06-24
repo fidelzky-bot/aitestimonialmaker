@@ -101,8 +101,12 @@ app.post('/api/generate', async (req, res) => {
       audioBuffer = Buffer.from(ttsResponse.data, 'binary');
       console.log('TTS audio generated');
     } catch (ttsErr) {
-      console.error('TTSOpenAI API error:', ttsErr.response?.data || ttsErr.message);
-      return res.status(500).json({ error: 'Failed to generate video', details: 'TTSOpenAI API error: ' + (ttsErr.response?.data || ttsErr.message) });
+      let errorMsg = ttsErr.response?.data;
+      if (Buffer.isBuffer(errorMsg)) {
+        errorMsg = errorMsg.toString('utf8');
+      }
+      console.error('TTSOpenAI API error:', errorMsg || ttsErr.message);
+      return res.status(500).json({ error: 'Failed to generate video', details: 'TTSOpenAI API error: ' + (errorMsg || ttsErr.message) });
     }
 
     // 2. Send audio + avatar to Akool for video generation (v3)
