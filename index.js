@@ -98,24 +98,39 @@ app.post('/api/generate', async (req, res) => {
     const audioBuffer = Buffer.from(ttsResponse.data, 'binary');
     console.log('TTS audio generated');
 
-    // 2. Send audio + avatar to Akool for video generation
+    // 2. Send audio + avatar to Akool for video generation (v3)
     const token = await getAkoolToken();
     const FormData = (await import('form-data')).default;
     const formData = new FormData();
-    formData.append('audio', audioBuffer, 'audio.wav');
-    formData.append('avatar_id', avatarId);
-    formData.append('text', testimonial);
+    formData.append('audioFile', audioBuffer, 'audio.wav'); // v3 expects 'audioFile'
+    formData.append('avatarId', avatarId);                  // v3 expects 'avatarId'
 
-    const akoolResponse = await axios.post('https://openapi.akool.com/v1/talking-head/generate', formData, {
-      headers: {
-        ...formData.getHeaders(),
-        'Authorization': `Bearer ${token}`
+    const akoolResponse = await axios.post(
+      'https://openapi.akool.com/api/open/v3/talking-head/generate',
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          'Authorization': `Bearer ${token}`
+        }
       }
-    });
+    );
     console.log('Akool video generation response:', akoolResponse.data);
-    res.json({ videoUrl: akoolResponse.data.video_url });
+
+    // Adjust this line if the key is different in the response
+    res.json({ videoUrl: akoolResponse.data.video_url || akoolResponse.data.data?.videoUrl });
   } catch (err) {
-    console.error('Error in /api/generate:', err.response?.data || err.message);
+    // Improved error logging
+    if (err.response && err.response.data) {
+      const data = err.response.data;
+      if (Buffer.isBuffer(data)) {
+        console.error('Error in /api/generate:', data.toString('utf8'));
+      } else {
+        console.error('Error in /api/generate:', data);
+      }
+    } else {
+      console.error('Error in /api/generate:', err.message);
+    }
     res.status(500).json({ error: 'Failed to generate video', details: err.message });
   }
 });
