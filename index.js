@@ -72,8 +72,12 @@ app.get('/api/avatars', async (req, res) => {
 
 // --- Generate Testimonial Video ---
 app.post('/api/generate', async (req, res) => {
+  console.log('Received /api/generate request:', req.body);
   const { testimonial, voiceId, avatarId } = req.body;
   try {
+    // Log input
+    console.log('Generating video with:', { testimonial, voiceId, avatarId });
+
     // 1. Get TTS audio from TTSOpenAI
     const ttsResponse = await axios.post(
       'https://api.ttsopenai.com/uapi/v1/text-to-speech',
@@ -92,6 +96,7 @@ app.post('/api/generate', async (req, res) => {
       }
     );
     const audioBuffer = Buffer.from(ttsResponse.data, 'binary');
+    console.log('TTS audio generated');
 
     // 2. Send audio + avatar to Akool for video generation
     const token = await getAkoolToken();
@@ -107,8 +112,10 @@ app.post('/api/generate', async (req, res) => {
         'Authorization': `Bearer ${token}`
       }
     });
+    console.log('Akool video generation response:', akoolResponse.data);
     res.json({ videoUrl: akoolResponse.data.video_url });
   } catch (err) {
+    console.error('Error in /api/generate:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to generate video', details: err.message });
   }
 });
