@@ -63,7 +63,7 @@ app.get('/api/avatars', async (req, res) => {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     console.log('Akool avatar API response:', response.data);
-    const avatars = response.data?.data?.list || [];
+    const avatars = response.data?.data?.result || [];
     res.json({ avatars });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch avatars' });
