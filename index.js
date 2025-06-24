@@ -52,10 +52,10 @@ app.get('/api/voices', (req, res) => {
 app.get('/api/avatars', async (req, res) => {
   try {
     const token = await getAkoolToken();
-    const response = await axios.get('https://openapi.akool.com/api/open/v3/avatar/list', {
+    const response = await axios.get('https://openapi.akool.com/api/open/v3/avatar/list?from=2&type=1', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    // The list of avatars is likely in response.data.data.list
+    console.log('Akool avatar API response:', response.data);
     const avatars = response.data?.data?.list || [];
     res.json({ avatars });
   } catch (err) {
