@@ -34,15 +34,18 @@ async function getAkoolToken() {
 }
 
 // --- TTSOpenAI: Get Voices ---
-app.get('/api/voices', async (req, res) => {
-  try {
-    const response = await axios.get('https://api.ttsopenai.com/v1/voices', {
-      headers: { 'Authorization': `Bearer ${process.env.TTSOPENAI_API_KEY}` }
-    });
-    res.json(response.data);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch voices' });
-  }
+// Static list based on TTSOpenAI documentation (update as needed)
+const ttsVoices = [
+  { voice_id: 'OA001', name: 'Alloy' },
+  { voice_id: 'OA002', name: 'Echo' },
+  { voice_id: 'OA003', name: 'Fable' },
+  { voice_id: 'OA004', name: 'Onyx' },
+  { voice_id: 'OA005', name: 'Nova' },
+  { voice_id: 'OA006', name: 'Shimmer' }
+];
+
+app.get('/api/voices', (req, res) => {
+  res.json({ voices: ttsVoices });
 });
 
 // --- Akool: Get Avatars ---
@@ -63,13 +66,22 @@ app.post('/api/generate', async (req, res) => {
   const { testimonial, voiceId, avatarId } = req.body;
   try {
     // 1. Get TTS audio from TTSOpenAI
-    const ttsResponse = await axios.post('https://api.ttsopenai.com/v1/tts', {
-      text: testimonial,
-      voice: voiceId
-    }, {
-      headers: { 'Authorization': `Bearer ${process.env.TTSOPENAI_API_KEY}` },
-      responseType: 'arraybuffer'
-    });
+    const ttsResponse = await axios.post(
+      'https://api.ttsopenai.com/uapi/v1/text-to-speech',
+      {
+        model: 'tts-1',
+        voice_id: voiceId,
+        speed: 1,
+        input: testimonial
+      },
+      {
+        headers: {
+          'x-api-key': process.env.TTSOPENAI_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
     const audioBuffer = Buffer.from(ttsResponse.data, 'binary');
 
     // 2. Send audio + avatar to Akool for video generation
