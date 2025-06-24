@@ -25,11 +25,12 @@ async function getAkoolToken() {
   }
   try {
     const response = await axios.post('https://openapi.akool.com/api/open/v3/getToken', {
-      client_id: process.env.AKOOL_CLIENT_ID,
-      client_secret: process.env.AKOOL_CLIENT_SECRET
+      clientId: process.env.AKOOL_CLIENT_ID,
+      clientSecret: process.env.AKOOL_CLIENT_SECRET
     });
-    akoolToken = response.data?.data?.access_token;
-    akoolTokenExpires = now + (response.data?.data?.expires_in * 1000);
+    akoolToken = response.data?.token;
+    // Set expiry to 1 hour from now (adjust if API provides expiry)
+    akoolTokenExpires = now + 3600 * 1000;
     console.log('Akool token generated:', akoolToken);
     return akoolToken;
   } catch (err) {
