@@ -88,7 +88,8 @@ app.post('/api/generate', async (req, res) => {
           model: 'tts-1',
           voice_id: voiceId,
           speed: 1,
-          input: testimonial
+          input: testimonial,
+          webhookUrl: 'https://aitestimonialmaker.onrender.com/api/tts-webhook'
         },
         {
           headers: {
@@ -184,6 +185,12 @@ app.post('/api/generate', async (req, res) => {
 app.post('/api/akool-webhook', express.json(), (req, res) => {
   console.log('Received Akool webhook:', req.body);
   // You can process/store the video URL or status here
+  res.status(200).send('OK');
+});
+
+// --- TTSOpenAI Webhook Endpoint ---
+app.post('/api/tts-webhook', express.json(), (req, res) => {
+  console.log('Received TTSOpenAI webhook:', req.body);
   res.status(200).send('OK');
 });
 
