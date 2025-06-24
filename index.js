@@ -23,14 +23,20 @@ async function getAkoolToken() {
   if (akoolToken && akoolTokenExpires > now + 60000) {
     return akoolToken;
   }
-  const response = await axios.post('https://openapi.akool.com/oauth2/token', {
-    client_id: process.env.AKOOL_CLIENT_ID,
-    client_secret: process.env.AKOOL_CLIENT_SECRET,
-    grant_type: 'client_credentials'
-  });
-  akoolToken = response.data.access_token;
-  akoolTokenExpires = now + (response.data.expires_in * 1000);
-  return akoolToken;
+  try {
+    const response = await axios.post('https://openapi.akool.com/oauth2/token', {
+      client_id: process.env.AKOOL_CLIENT_ID,
+      client_secret: process.env.AKOOL_CLIENT_SECRET,
+      grant_type: 'client_credentials'
+    });
+    akoolToken = response.data.access_token;
+    akoolTokenExpires = now + (response.data.expires_in * 1000);
+    console.log('Akool token generated:', akoolToken);
+    return akoolToken;
+  } catch (err) {
+    console.error('Failed to get Akool token:', err.response?.data || err.message);
+    return null;
+  }
 }
 
 // --- TTSOpenAI: Get Voices ---
@@ -52,6 +58,7 @@ app.get('/api/voices', (req, res) => {
 app.get('/api/avatars', async (req, res) => {
   try {
     const token = await getAkoolToken();
+    console.log('Akool token used for avatar API:', token);
     const response = await axios.get('https://openapi.akool.com/api/open/v3/avatar/list?from=2&type=1', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
