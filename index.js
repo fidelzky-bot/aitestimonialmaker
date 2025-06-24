@@ -24,13 +24,12 @@ async function getAkoolToken() {
     return akoolToken;
   }
   try {
-    const response = await axios.post('https://openapi.akool.com/oauth2/token', {
+    const response = await axios.post('https://openapi.akool.com/api/open/v3/getToken', {
       client_id: process.env.AKOOL_CLIENT_ID,
-      client_secret: process.env.AKOOL_CLIENT_SECRET,
-      grant_type: 'client_credentials'
+      client_secret: process.env.AKOOL_CLIENT_SECRET
     });
-    akoolToken = response.data.access_token;
-    akoolTokenExpires = now + (response.data.expires_in * 1000);
+    akoolToken = response.data?.data?.access_token;
+    akoolTokenExpires = now + (response.data?.data?.expires_in * 1000);
     console.log('Akool token generated:', akoolToken);
     return akoolToken;
   } catch (err) {
