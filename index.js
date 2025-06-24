@@ -118,6 +118,17 @@ app.post('/api/generate', async (req, res) => {
     formData.append('avatarId', avatarId);                  // v3 expects 'avatarId'
     formData.append('webhookUrl', 'https://aitestimonialmaker.onrender.com/api/akool-webhook'); // required by Akool v3
 
+    // Log all form data keys and values
+    for (const [key, value] of Object.entries(formData.getBuffer() ? formData._streams.reduce((acc, cur, idx, arr) => {
+      if (typeof cur === 'string' && cur.startsWith('Content-Disposition')) {
+        const match = cur.match(/name="([^"]+)"/);
+        if (match) acc[match[1]] = arr[idx + 1];
+      }
+      return acc;
+    }, {}) : {})) {
+      console.log(`Akool formData: ${key} =`, value);
+    }
+
     try {
       const akoolResponse = await axios.post(
         'https://openapi.akool.com/api/open/v3/talking-head/generate',
