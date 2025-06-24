@@ -118,18 +118,25 @@ app.post('/api/generate', async (req, res) => {
     formData.append('avatarId', avatarId);                  // v3 expects 'avatarId'
     formData.append('webhookUrl', 'https://aitestimonialmaker.onrender.com/api/akool-webhook'); // required by Akool v3
 
-    // Log all form data keys and values
-    for (const [key, value] of Object.entries(formData.getBuffer() ? formData._streams.reduce((acc, cur, idx, arr) => {
-      if (typeof cur === 'string' && cur.startsWith('Content-Disposition')) {
-        const match = cur.match(/name="([^"]+)"/);
-        if (match) acc[match[1]] = arr[idx + 1];
+    // Robustly log all form data keys and values
+    if (formData && formData._streams) {
+      console.log('--- Akool formData contents ---');
+      for (let i = 0; i < formData._streams.length; i++) {
+        const stream = formData._streams[i];
+        if (typeof stream === 'string' && stream.startsWith('Content-Disposition')) {
+          const match = stream.match(/name="([^"]+)"/);
+          if (match) {
+            const key = match[1];
+            const value = formData._streams[i + 1];
+            console.log(`Akool formData: ${key} =`, value);
+          }
+        }
       }
-      return acc;
-    }, {}) : {})) {
-      console.log(`Akool formData: ${key} =`, value);
+      console.log('--- End Akool formData contents ---');
     }
 
     try {
+      console.log('Entering Akool API try block...');
       const akoolResponse = await axios.post(
         'https://openapi.akool.com/api/open/v3/talking-head/generate',
         formData,
@@ -143,6 +150,7 @@ app.post('/api/generate', async (req, res) => {
       console.log('Akool video generation response:', akoolResponse.data);
       res.json({ videoUrl: akoolResponse.data.video_url || akoolResponse.data.data?.videoUrl });
     } catch (akoolErr) {
+      console.error('Akool API error (full object):', akoolErr);
       if (akoolErr.response && akoolErr.response.data) {
         const data = akoolErr.response.data;
         if (Buffer.isBuffer(data)) {
