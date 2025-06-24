@@ -104,6 +104,7 @@ app.post('/api/generate', async (req, res) => {
     const formData = new FormData();
     formData.append('audioFile', audioBuffer, 'audio.wav'); // v3 expects 'audioFile'
     formData.append('avatarId', avatarId);                  // v3 expects 'avatarId'
+    formData.append('webhookUrl', 'https://aitestimonialmaker.onrender.com/api/akool-webhook'); // required by Akool v3
 
     const akoolResponse = await axios.post(
       'https://openapi.akool.com/api/open/v3/talking-head/generate',
@@ -133,6 +134,13 @@ app.post('/api/generate', async (req, res) => {
     }
     res.status(500).json({ error: 'Failed to generate video', details: err.message });
   }
+});
+
+// --- Akool Webhook Endpoint ---
+app.post('/api/akool-webhook', express.json(), (req, res) => {
+  console.log('Received Akool webhook:', req.body);
+  // You can process/store the video URL or status here
+  res.status(200).send('OK');
 });
 
 app.listen(PORT, () => {
