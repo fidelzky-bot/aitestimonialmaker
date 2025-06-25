@@ -145,9 +145,9 @@ app.post('/api/tts-webhook', express.json(), async (req, res) => {
   console.log('Received TTSOpenAI webhook:', JSON.stringify(req.body, null, 2));
   try {
     const { data, event_uuid } = req.body;
-    console.log('Webhook data:', data);
-    // Find the job context using uuid
     const uuid = data?.uuid || event_uuid;
+    console.log('Webhook uuid:', uuid);
+    console.log('Current pendingTTSJobs:', pendingTTSJobs);
     const job = uuid ? pendingTTSJobs[uuid] : undefined;
     if (!data || !data.media_url || !job) {
       console.error('Missing media_url or job context in TTSOpenAI webhook');
