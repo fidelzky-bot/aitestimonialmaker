@@ -78,7 +78,7 @@ app.post('/api/generate', async (req, res) => {
     // Log input
     console.log('Generating video with:', { testimonial, voiceId, avatarId });
 
-    // 1. Get TTS audio from TTSOpenAI
+    // 1. Get TTS audio from TTSOpenAI and extract media_url
     const ttsRequestBody = {
       model: 'tts-1',
       voice_id: voiceId,
@@ -91,18 +91,19 @@ app.post('/api/generate', async (req, res) => {
     };
     console.log('TTSOpenAI request body:', ttsRequestBody);
     console.log('TTSOpenAI request headers:', ttsRequestHeaders);
-    let audioBuffer;
+    let audioUrl;
     try {
       const ttsResponse = await axios.post(
         'https://api.ttsopenai.com/uapi/v1/text-to-speech',
         ttsRequestBody,
         {
           headers: ttsRequestHeaders,
-          responseType: 'arraybuffer'
+          responseType: 'json'
         }
       );
-      audioBuffer = Buffer.from(ttsResponse.data, 'binary');
-      console.log('TTS audio generated');
+      audioUrl = ttsResponse.data.media_url;
+      if (!audioUrl) throw new Error('No media_url in TTSOpenAI response');
+      console.log('TTSOpenAI audio URL:', audioUrl);
     } catch (ttsErr) {
       let errorMsg = ttsErr.response?.data;
       if (Buffer.isBuffer(errorMsg)) {
@@ -112,32 +113,7 @@ app.post('/api/generate', async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate video', details: 'TTSOpenAI API error: ' + (errorMsg || ttsErr.message) });
     }
 
-    // 2. Upload audio to transfer.sh
-    let audioUrl;
-    try {
-      const uploadResponse = await axios.put(
-        'https://transfer.sh/audio.wav',
-        audioBuffer,
-        {
-          headers: {
-            'Content-Type': 'audio/wav',
-            'Content-Length': audioBuffer.length,
-            'User-Agent': 'Mozilla/5.0'
-          }
-        }
-      );
-      audioUrl = uploadResponse.data.trim();
-      console.log('Audio uploaded to transfer.sh:', audioUrl);
-    } catch (uploadErr) {
-      if (uploadErr.response) {
-        console.error('Audio upload to transfer.sh failed:', uploadErr.response.status, uploadErr.response.statusText, uploadErr.response.data);
-      } else {
-        console.error('Audio upload to transfer.sh failed:', uploadErr.message);
-      }
-      return res.status(500).json({ error: 'Failed to upload audio', details: uploadErr.response?.data || uploadErr.message });
-    }
-
-    // 3. Send Akool video generation request (JSON)
+    // 2. Send Akool video generation request (JSON)
     const token = await getAkoolToken();
     const akoolBody = {
       width: 3840,
