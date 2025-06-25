@@ -121,14 +121,19 @@ app.post('/api/generate', async (req, res) => {
         {
           headers: {
             'Content-Type': 'audio/wav',
-            'Content-Length': audioBuffer.length
+            'Content-Length': audioBuffer.length,
+            'User-Agent': 'Mozilla/5.0'
           }
         }
       );
       audioUrl = uploadResponse.data.trim();
       console.log('Audio uploaded to transfer.sh:', audioUrl);
     } catch (uploadErr) {
-      console.error('Audio upload to transfer.sh failed:', uploadErr.response?.data || uploadErr.message);
+      if (uploadErr.response) {
+        console.error('Audio upload to transfer.sh failed:', uploadErr.response.status, uploadErr.response.statusText, uploadErr.response.data);
+      } else {
+        console.error('Audio upload to transfer.sh failed:', uploadErr.message);
+      }
       return res.status(500).json({ error: 'Failed to upload audio', details: uploadErr.response?.data || uploadErr.message });
     }
 
