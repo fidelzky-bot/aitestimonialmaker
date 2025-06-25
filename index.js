@@ -108,19 +108,14 @@ app.post('/api/generate', async (req, res) => {
     };
     console.log('TTSOpenAI async request body:', ttsRequestBody);
     try {
-      const ttsResponse = await axios.post(
+      await axios.post(
         'https://api.ttsopenai.com/uapi/v1/text-to-speech',
         ttsRequestBody,
         { headers: ttsRequestHeaders }
       );
-      // Store the job context using the uuid from the response
-      const uuid = ttsResponse.data?.uuid;
-      if (uuid) {
-        await jobsCollection.insertOne({ uuid, testimonial, voiceId, avatarId, createdAt: new Date() });
-        console.log('Stored pending TTS job in MongoDB:', uuid, { testimonial, voiceId, avatarId });
-      } else {
-        console.warn('No uuid returned from TTSOpenAI, cannot track job context.');
-      }
+      // Store the job context using testimonial, voiceId, avatarId
+      await jobsCollection.insertOne({ testimonial, voiceId, avatarId, createdAt: new Date() });
+      console.log('Stored pending TTS job in MongoDB:', { testimonial, voiceId, avatarId });
       res.json({ message: 'Video generation started. You will be notified when it is ready.' });
     } catch (ttsErr) {
       let errorMsg = ttsErr.response?.data;
@@ -158,20 +153,24 @@ app.post('/api/tts-webhook', express.json(), async (req, res) => {
   await connectMongo();
   console.log('Received TTSOpenAI webhook:', JSON.stringify(req.body, null, 2));
   try {
-    const { data, event_uuid } = req.body;
-    const uuid = data?.uuid || event_uuid;
-    console.log('Webhook uuid:', uuid);
-    // Find the job context using uuid in MongoDB
-    const job = uuid ? await jobsCollection.findOne({ uuid }) : undefined;
+    const { data } = req.body;
+    const testimonial = data?.tts_input;
+    const voiceId = data?.voice_id;
+    console.log('Webhook testimonial:', testimonial);
+    console.log('Webhook voiceId:', voiceId);
+    // Find the most recent job context using testimonial and voiceId in MongoDB
+    const job = testimonial && voiceId
+      ? await jobsCollection.findOne({ testimonial, voiceId }, { sort: { createdAt: -1 } })
+      : undefined;
     console.log('MongoDB job context:', job);
     if (!data || !data.media_url || !job) {
       console.error('Missing media_url or job context in TTSOpenAI webhook');
       return res.status(400).send('Missing media_url or job context');
     }
-    const { testimonial, voiceId, avatarId } = job;
+    const { avatarId } = job;
     const audioUrl = data.media_url;
     // Clean up the job context
-    await jobsCollection.deleteOne({ uuid });
+    await jobsCollection.deleteOne({ _id: job._id });
     const token = await getAkoolToken();
     const akoolBody = {
       width: 3840,
