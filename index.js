@@ -70,6 +70,9 @@ app.get('/api/avatars', async (req, res) => {
   }
 });
 
+// In-memory store for pending TTS jobs
+const pendingTTSJobs = {};
+
 // --- Generate Testimonial Video ---
 app.post('/api/generate', async (req, res) => {
   console.log('Received /api/generate request:', req.body);
@@ -78,18 +81,13 @@ app.post('/api/generate', async (req, res) => {
     // Log input
     console.log('Starting async video generation with:', { testimonial, voiceId, avatarId });
 
-    // 1. Submit TTSOpenAI request with webhook and metadata
+    // 1. Submit TTSOpenAI request with webhook
     const ttsRequestBody = {
       model: 'tts-1',
       voice_id: voiceId,
       speed: 1,
       input: testimonial,
-      webhook_url: process.env.TTSOPENAI_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/tts-webhook',
-      metadata: {
-        testimonial,
-        voiceId,
-        avatarId
-      }
+      webhook_url: process.env.TTSOPENAI_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/tts-webhook'
     };
     const ttsRequestHeaders = {
       'x-api-key': process.env.TTSOPENAI_API_KEY,
@@ -97,11 +95,19 @@ app.post('/api/generate', async (req, res) => {
     };
     console.log('TTSOpenAI async request body:', ttsRequestBody);
     try {
-      await axios.post(
+      const ttsResponse = await axios.post(
         'https://api.ttsopenai.com/uapi/v1/text-to-speech',
         ttsRequestBody,
         { headers: ttsRequestHeaders }
       );
+      // Store the job context using the uuid from the response
+      const uuid = ttsResponse.data?.uuid;
+      if (uuid) {
+        pendingTTSJobs[uuid] = { testimonial, voiceId, avatarId };
+        console.log('Stored pending TTS job:', uuid, pendingTTSJobs[uuid]);
+      } else {
+        console.warn('No uuid returned from TTSOpenAI, cannot track job context.');
+      }
       res.json({ message: 'Video generation started. You will be notified when it is ready.' });
     } catch (ttsErr) {
       let errorMsg = ttsErr.response?.data;
@@ -138,16 +144,19 @@ app.post('/api/akool-webhook', express.json(), (req, res) => {
 app.post('/api/tts-webhook', express.json(), async (req, res) => {
   console.log('Received TTSOpenAI webhook:', JSON.stringify(req.body, null, 2));
   try {
-    const { data, metadata } = req.body;
+    const { data, event_uuid } = req.body;
     console.log('Webhook data:', data);
-    console.log('Webhook metadata:', metadata);
-
-    if (!data || !data.media_url || !metadata) {
-      console.error('Missing media_url or metadata in TTSOpenAI webhook');
-      return res.status(400).send('Missing media_url or metadata');
+    // Find the job context using uuid
+    const uuid = data?.uuid || event_uuid;
+    const job = uuid ? pendingTTSJobs[uuid] : undefined;
+    if (!data || !data.media_url || !job) {
+      console.error('Missing media_url or job context in TTSOpenAI webhook');
+      return res.status(400).send('Missing media_url or job context');
     }
-    const { testimonial, voiceId, avatarId } = metadata;
+    const { testimonial, voiceId, avatarId } = job;
     const audioUrl = data.media_url;
+    // Clean up the job context
+    delete pendingTTSJobs[uuid];
     const token = await getAkoolToken();
     const akoolBody = {
       width: 3840,
