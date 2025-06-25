@@ -136,9 +136,12 @@ app.post('/api/akool-webhook', express.json(), (req, res) => {
 
 // --- TTSOpenAI Webhook Endpoint ---
 app.post('/api/tts-webhook', express.json(), async (req, res) => {
-  console.log('Received TTSOpenAI webhook:', req.body);
+  console.log('Received TTSOpenAI webhook:', JSON.stringify(req.body, null, 2));
   try {
     const { data, metadata } = req.body;
+    console.log('Webhook data:', data);
+    console.log('Webhook metadata:', metadata);
+
     if (!data || !data.media_url || !metadata) {
       console.error('Missing media_url or metadata in TTSOpenAI webhook');
       return res.status(400).send('Missing media_url or metadata');
