@@ -173,26 +173,9 @@ app.post('/api/tts-webhook', express.json(), async (req, res) => {
     await jobsCollection.deleteOne({ _id: job._id });
     const token = await getAkoolToken();
     const akoolBody = {
-      width: 3840,
-      height: 2160,
-      avatar_from: 2,
-      elements: [
-        {
-          type: 'avatar',
-          avatar_id: avatarId,
-          scale_x: 1,
-          scale_y: 1,
-          width: 1080,
-          height: 1080,
-          offset_x: 1920,
-          offset_y: 1080
-        },
-        {
-          type: 'audio',
-          url: audioUrl
-        }
-      ],
-      webhookUrl: process.env.AKOOL_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
+      avatar_id: avatarId,
+      audio_url: audioUrl,
+      webhook_url: process.env.AKOOL_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
     };
     console.log('Akool request body:', JSON.stringify(akoolBody, null, 2));
     try {
