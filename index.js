@@ -76,49 +76,80 @@ app.post('/api/generate', async (req, res) => {
   const { testimonial, voiceId, avatarId } = req.body;
   try {
     // Log input
-    console.log('Generating video with:', { testimonial, voiceId, avatarId });
+    console.log('Starting async video generation with:', { testimonial, voiceId, avatarId });
 
-    // 1. Get TTS audio from TTSOpenAI and extract media_url
+    // 1. Submit TTSOpenAI request with webhook and metadata
     const ttsRequestBody = {
       model: 'tts-1',
       voice_id: voiceId,
       speed: 1,
-      input: testimonial
+      input: testimonial,
+      webhook_url: process.env.TTSOPENAI_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/tts-webhook',
+      metadata: {
+        testimonial,
+        voiceId,
+        avatarId
+      }
     };
     const ttsRequestHeaders = {
       'x-api-key': process.env.TTSOPENAI_API_KEY,
       'Content-Type': 'application/json'
     };
-    console.log('TTSOpenAI request body:', ttsRequestBody);
-    console.log('TTSOpenAI request headers:', ttsRequestHeaders);
-    let audioUrl;
+    console.log('TTSOpenAI async request body:', ttsRequestBody);
     try {
-      const ttsResponse = await axios.post(
+      await axios.post(
         'https://api.ttsopenai.com/uapi/v1/text-to-speech',
         ttsRequestBody,
-        {
-          headers: ttsRequestHeaders,
-          responseType: 'json'
-        }
+        { headers: ttsRequestHeaders }
       );
-      audioUrl = ttsResponse.data.media_url;
-      if (!audioUrl) throw new Error('No media_url in TTSOpenAI response');
-      console.log('TTSOpenAI audio URL:', audioUrl);
+      res.json({ message: 'Video generation started. You will be notified when it is ready.' });
     } catch (ttsErr) {
       let errorMsg = ttsErr.response?.data;
       if (Buffer.isBuffer(errorMsg)) {
         errorMsg = errorMsg.toString('utf8');
       }
       console.error('TTSOpenAI API error:', errorMsg || ttsErr.message);
-      return res.status(500).json({ error: 'Failed to generate video', details: 'TTSOpenAI API error: ' + (errorMsg || ttsErr.message) });
+      return res.status(500).json({ error: 'Failed to start video generation', details: 'TTSOpenAI API error: ' + (errorMsg || ttsErr.message) });
     }
+  } catch (err) {
+    // Improved error logging
+    if (err.response && err.response.data) {
+      const data = err.response.data;
+      if (Buffer.isBuffer(data)) {
+        console.error('Error in /api/generate:', data.toString('utf8'));
+      } else {
+        console.error('Error in /api/generate:', data);
+      }
+    } else {
+      console.error('Error in /api/generate:', err.message);
+    }
+    res.status(500).json({ error: 'Failed to start video generation', details: err.message });
+  }
+});
 
-    // 2. Send Akool video generation request (JSON)
+// --- Akool Webhook Endpoint ---
+app.post('/api/akool-webhook', express.json(), (req, res) => {
+  console.log('Received Akool webhook:', req.body);
+  // You can process/store the video URL or status here
+  res.status(200).send('OK');
+});
+
+// --- TTSOpenAI Webhook Endpoint ---
+app.post('/api/tts-webhook', express.json(), async (req, res) => {
+  console.log('Received TTSOpenAI webhook:', req.body);
+  try {
+    const { data, metadata } = req.body;
+    if (!data || !data.media_url || !metadata) {
+      console.error('Missing media_url or metadata in TTSOpenAI webhook');
+      return res.status(400).send('Missing media_url or metadata');
+    }
+    const { testimonial, voiceId, avatarId } = metadata;
+    const audioUrl = data.media_url;
     const token = await getAkoolToken();
     const akoolBody = {
       width: 3840,
       height: 2160,
-      avatar_from: 2, // using Akool avatar library (change to 3 if using custom URL)
+      avatar_from: 2,
       elements: [
         {
           type: 'avatar',
@@ -135,7 +166,7 @@ app.post('/api/generate', async (req, res) => {
           url: audioUrl
         }
       ],
-      webhookUrl: 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
+      webhookUrl: process.env.AKOOL_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
     };
     try {
       const akoolResponse = await axios.post(
@@ -148,50 +179,15 @@ app.post('/api/generate', async (req, res) => {
           }
         }
       );
-      console.log('Akool video generation response:', akoolResponse.data);
-      res.json({ videoUrl: akoolResponse.data.video_url || akoolResponse.data.data?.videoUrl });
+      console.log('Akool video generation response (from webhook):', akoolResponse.data);
     } catch (akoolErr) {
-      console.error('Akool API error (full object):', akoolErr);
-      if (akoolErr.response && akoolErr.response.data) {
-        const data = akoolErr.response.data;
-        if (Buffer.isBuffer(data)) {
-          console.error('Akool API error:', data.toString('utf8'));
-        } else {
-          console.error('Akool API error:', data);
-        }
-        return res.status(500).json({ error: 'Failed to generate video', details: 'Akool API error: ' + (Buffer.isBuffer(data) ? data.toString('utf8') : JSON.stringify(data)) });
-      } else {
-        console.error('Akool API error:', akoolErr.message);
-        return res.status(500).json({ error: 'Failed to generate video', details: 'Akool API error: ' + akoolErr.message });
-      }
+      console.error('Akool API error (from webhook):', akoolErr.response?.data || akoolErr.message);
     }
+    res.status(200).send('OK');
   } catch (err) {
-    // Improved error logging
-    if (err.response && err.response.data) {
-      const data = err.response.data;
-      if (Buffer.isBuffer(data)) {
-        console.error('Error in /api/generate:', data.toString('utf8'));
-      } else {
-        console.error('Error in /api/generate:', data);
-      }
-    } else {
-      console.error('Error in /api/generate:', err.message);
-    }
-    res.status(500).json({ error: 'Failed to generate video', details: err.message });
+    console.error('Error in /api/tts-webhook:', err.message);
+    res.status(500).send('Internal server error');
   }
-});
-
-// --- Akool Webhook Endpoint ---
-app.post('/api/akool-webhook', express.json(), (req, res) => {
-  console.log('Received Akool webhook:', req.body);
-  // You can process/store the video URL or status here
-  res.status(200).send('OK');
-});
-
-// --- TTSOpenAI Webhook Endpoint ---
-app.post('/api/tts-webhook', express.json(), (req, res) => {
-  console.log('Received TTSOpenAI webhook:', req.body);
-  res.status(200).send('OK');
 });
 
 app.listen(PORT, () => {
