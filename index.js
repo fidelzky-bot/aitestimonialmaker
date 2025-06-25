@@ -79,23 +79,25 @@ app.post('/api/generate', async (req, res) => {
     console.log('Generating video with:', { testimonial, voiceId, avatarId });
 
     // 1. Get TTS audio from TTSOpenAI
-    console.log('Requesting TTS audio from TTSOpenAI...');
+    const ttsRequestBody = {
+      model: 'tts-1',
+      voice_id: voiceId,
+      speed: 1,
+      input: testimonial
+    };
+    const ttsRequestHeaders = {
+      'x-api-key': process.env.TTSOPENAI_API_KEY,
+      'Content-Type': 'application/json'
+    };
+    console.log('TTSOpenAI request body:', ttsRequestBody);
+    console.log('TTSOpenAI request headers:', ttsRequestHeaders);
     let audioBuffer;
     try {
       const ttsResponse = await axios.post(
         'https://api.ttsopenai.com/uapi/v1/text-to-speech',
+        ttsRequestBody,
         {
-          model: 'tts-1',
-          voice_id: voiceId,
-          speed: 1,
-          input: testimonial,
-          webhookUrl: 'https://aitestimonialmaker.onrender.com/api/tts-webhook'
-        },
-        {
-          headers: {
-            'x-api-key': process.env.TTSOPENAI_API_KEY,
-            'Content-Type': 'application/json'
-          },
+          headers: ttsRequestHeaders,
           responseType: 'arraybuffer'
         }
       );
@@ -139,7 +141,7 @@ app.post('/api/generate', async (req, res) => {
     try {
       console.log('Entering Akool API try block...');
       const akoolResponse = await axios.post(
-        'https://openapi.akool.com/api/open/v3/talking-head/generate',
+        'https://openapi.akool.com/api/open/v3/talkingavatar/create',
         formData,
         {
           headers: {
