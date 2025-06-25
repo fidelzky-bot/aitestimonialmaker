@@ -112,41 +112,58 @@ app.post('/api/generate', async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate video', details: 'TTSOpenAI API error: ' + (errorMsg || ttsErr.message) });
     }
 
-    // 2. Send audio + avatar to Akool for video generation (v3)
-    console.log('Requesting video generation from Akool...');
-    const token = await getAkoolToken();
-    const FormData = (await import('form-data')).default;
-    const formData = new FormData();
-    formData.append('audioFile', audioBuffer, 'audio.wav'); // v3 expects 'audioFile'
-    formData.append('avatarId', avatarId);                  // v3 expects 'avatarId'
-    formData.append('webhookUrl', 'https://aitestimonialmaker.onrender.com/api/akool-webhook'); // required by Akool v3
-
-    // Robustly log all form data keys and values
-    if (formData && formData._streams) {
-      console.log('--- Akool formData contents ---');
-      for (let i = 0; i < formData._streams.length; i++) {
-        const stream = formData._streams[i];
-        if (typeof stream === 'string' && stream.startsWith('Content-Disposition')) {
-          const match = stream.match(/name="([^"]+)"/);
-          if (match) {
-            const key = match[1];
-            const value = formData._streams[i + 1];
-            console.log(`Akool formData: ${key} =`, value);
-          }
-        }
-      }
-      console.log('--- End Akool formData contents ---');
-    }
-
+    // 2. Upload audio to transfer.sh
+    let audioUrl;
     try {
-      console.log('Entering Akool API try block...');
-      const akoolResponse = await axios.post(
-        'https://openapi.akool.com/api/open/v3/talkingavatar/create',
-        formData,
+      const uploadResponse = await axios.put(
+        'https://transfer.sh/audio.wav',
+        audioBuffer,
         {
           headers: {
-            ...formData.getHeaders(),
-            'Authorization': `Bearer ${token}`
+            'Content-Type': 'audio/wav',
+            'Content-Length': audioBuffer.length
+          }
+        }
+      );
+      audioUrl = uploadResponse.data.trim();
+      console.log('Audio uploaded to transfer.sh:', audioUrl);
+    } catch (uploadErr) {
+      console.error('Audio upload to transfer.sh failed:', uploadErr.response?.data || uploadErr.message);
+      return res.status(500).json({ error: 'Failed to upload audio', details: uploadErr.response?.data || uploadErr.message });
+    }
+
+    // 3. Send Akool video generation request (JSON)
+    const token = await getAkoolToken();
+    const akoolBody = {
+      width: 3840,
+      height: 2160,
+      avatar_from: 2, // using Akool avatar library (change to 3 if using custom URL)
+      elements: [
+        {
+          type: 'avatar',
+          avatar_id: avatarId,
+          scale_x: 1,
+          scale_y: 1,
+          width: 1080,
+          height: 1080,
+          offset_x: 1920,
+          offset_y: 1080
+        },
+        {
+          type: 'audio',
+          url: audioUrl
+        }
+      ],
+      webhookUrl: 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
+    };
+    try {
+      const akoolResponse = await axios.post(
+        'https://openapi.akool.com/api/open/v3/talkingavatar/create',
+        akoolBody,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
         }
       );
