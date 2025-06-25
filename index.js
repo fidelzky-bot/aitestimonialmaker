@@ -194,6 +194,7 @@ app.post('/api/tts-webhook', express.json(), async (req, res) => {
       ],
       webhookUrl: process.env.AKOOL_WEBHOOK_URL || 'https://aitestimonialmaker.onrender.com/api/akool-webhook'
     };
+    console.log('Akool request body:', JSON.stringify(akoolBody, null, 2));
     try {
       const akoolResponse = await axios.post(
         'https://openapi.akool.com/api/open/v3/talkingavatar/create',
