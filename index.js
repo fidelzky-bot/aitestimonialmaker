@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import { MongoClient } from 'mongodb';
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +18,20 @@ app.use(express.json());
 // --- Akool OAuth2 Token Management ---
 let akoolToken = null;
 let akoolTokenExpires = 0;
+
+// MongoDB connection setup
+const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://aitestimonial:aitestimonialpass!@cluster0.rncdugm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const mongoClient = new MongoClient(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+let jobsCollection;
+
+async function connectMongo() {
+  if (!jobsCollection) {
+    await mongoClient.connect();
+    const db = mongoClient.db('aitestimonial');
+    jobsCollection = db.collection('pending_tts_jobs');
+    console.log('Connected to MongoDB and ready for job storage.');
+  }
+}
 
 async function getAkoolToken() {
   const now = Date.now();
@@ -70,11 +85,9 @@ app.get('/api/avatars', async (req, res) => {
   }
 });
 
-// In-memory store for pending TTS jobs
-const pendingTTSJobs = {};
-
 // --- Generate Testimonial Video ---
 app.post('/api/generate', async (req, res) => {
+  await connectMongo();
   console.log('Received /api/generate request:', req.body);
   const { testimonial, voiceId, avatarId } = req.body;
   try {
@@ -103,8 +116,8 @@ app.post('/api/generate', async (req, res) => {
       // Store the job context using the uuid from the response
       const uuid = ttsResponse.data?.uuid;
       if (uuid) {
-        pendingTTSJobs[uuid] = { testimonial, voiceId, avatarId };
-        console.log('Stored pending TTS job:', uuid, pendingTTSJobs[uuid]);
+        await jobsCollection.insertOne({ uuid, testimonial, voiceId, avatarId, createdAt: new Date() });
+        console.log('Stored pending TTS job in MongoDB:', uuid, { testimonial, voiceId, avatarId });
       } else {
         console.warn('No uuid returned from TTSOpenAI, cannot track job context.');
       }
@@ -142,13 +155,15 @@ app.post('/api/akool-webhook', express.json(), (req, res) => {
 
 // --- TTSOpenAI Webhook Endpoint ---
 app.post('/api/tts-webhook', express.json(), async (req, res) => {
+  await connectMongo();
   console.log('Received TTSOpenAI webhook:', JSON.stringify(req.body, null, 2));
   try {
     const { data, event_uuid } = req.body;
     const uuid = data?.uuid || event_uuid;
     console.log('Webhook uuid:', uuid);
-    console.log('Current pendingTTSJobs:', pendingTTSJobs);
-    const job = uuid ? pendingTTSJobs[uuid] : undefined;
+    // Find the job context using uuid in MongoDB
+    const job = uuid ? await jobsCollection.findOne({ uuid }) : undefined;
+    console.log('MongoDB job context:', job);
     if (!data || !data.media_url || !job) {
       console.error('Missing media_url or job context in TTSOpenAI webhook');
       return res.status(400).send('Missing media_url or job context');
@@ -156,7 +171,7 @@ app.post('/api/tts-webhook', express.json(), async (req, res) => {
     const { testimonial, voiceId, avatarId } = job;
     const audioUrl = data.media_url;
     // Clean up the job context
-    delete pendingTTSJobs[uuid];
+    await jobsCollection.deleteOne({ uuid });
     const token = await getAkoolToken();
     const akoolBody = {
       width: 3840,
